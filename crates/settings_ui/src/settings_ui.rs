@@ -10,10 +10,10 @@ use futures::{StreamExt, channel::mpsc};
 use fuzzy::StringMatchCandidate;
 use gpui::{
     Action, App, AsyncApp, AvailableSpace, ClipboardItem, DEFAULT_ADDITIONAL_WINDOW_SIZE, Div,
-    Entity, FocusHandle, Focusable, Global, KeyContext, ListState, ReadGlobal as _, Role,
-    ScrollHandle, Stateful, Subscription, Task, TitlebarOptions, UniformListScrollHandle,
-    WeakEntity, Window, WindowBounds, WindowHandle, WindowOptions, actions, container_query, div,
-    list, point, prelude::*, px, uniform_list,
+    Entity, FocusHandle, Focusable, Global, KeyContext, ListState, PathPromptOptions,
+    ReadGlobal as _, Role, ScrollHandle, Stateful, Subscription, Task, TitlebarOptions,
+    UniformListScrollHandle, WeakEntity, Window, WindowBounds, WindowHandle, WindowOptions,
+    actions, container_query, div, list, point, prelude::*, px, uniform_list,
 };
 
 use language::Buffer;
@@ -446,6 +446,7 @@ struct SettingsFieldMetadata {
     display_clear_button: bool,
     confirm_on_focus_out: bool,
     treat_missing_text_as_empty: bool,
+    file_picker: Option<&'static str>,
 }
 
 pub fn init(cx: &mut App) {
@@ -658,6 +659,7 @@ fn init_renderers(cx: &mut App) {
         .add_basic_renderer::<settings::IconThemeSelectionDiscriminants>(render_dropdown)
         .add_basic_renderer::<settings::IconThemeName>(render_icon_theme_picker)
         .add_basic_renderer::<settings::BufferLineHeightDiscriminants>(render_dropdown)
+        .add_basic_renderer::<settings::BackgroundImageFit>(render_dropdown)
         .add_basic_renderer::<settings::GitGutterWidthDiscriminants>(render_dropdown)
         .add_basic_renderer::<settings::ProjectPanelTitleTooltipDelayDiscriminants>(render_dropdown)
         .add_basic_renderer::<settings::AutosaveSettingDiscriminants>(render_dropdown)
@@ -5049,7 +5051,8 @@ fn render_text_field<T: From<String> + Into<String> + AsRef<str> + Clone>(
 
     // The JSON path uniquely identifies the setting this field edits, making
     // it a stable, collision-free element ID within the page.
-    SettingsInputField::new(field.json_path.unwrap_or("settings-text-field"))
+    let file_for_picker = file.clone();
+    let input = SettingsInputField::new(field.json_path.unwrap_or("settings-text-field"))
         .tab_index(0)
         .aria_label(title)
         .when(!description.is_empty(), |editor| {
@@ -5085,7 +5088,54 @@ fn render_text_field<T: From<String> + Into<String> + AsRef<str> + Clone>(
                 )
                 .log_err(); // todo(settings_ui) don't log err
             }
-        })
+        });
+
+    let Some(prompt) = metadata.and_then(|metadata| metadata.file_picker) else {
+        return input.into_any_element();
+    };
+
+    h_flex()
+        .gap_2()
+        .items_center()
+        .child(div().flex_1().child(input))
+        .child(
+            Button::new(prompt, "Choose File...")
+                .style(ButtonStyle::Outlined)
+                .size(ButtonSize::Medium)
+                .tab_index(0_isize)
+                .on_click(move |_, window, cx| {
+                    let paths = cx.prompt_for_paths(PathPromptOptions {
+                        files: true,
+                        directories: false,
+                        multiple: false,
+                        prompt: Some(prompt.into()),
+                    });
+                    let file = file_for_picker.clone();
+                    window
+                        .spawn(cx, async move |cx| {
+                            let Some(path) = (match paths.await {
+                                Ok(Ok(Some(paths))) => paths.into_iter().next(),
+                                _ => None,
+                            }) else {
+                                return anyhow::Ok(());
+                            };
+                            let path = path.to_string_lossy().into_owned();
+                            cx.update(|window, cx| {
+                                update_settings_file(
+                                    file,
+                                    field.json_path,
+                                    window,
+                                    cx,
+                                    move |settings, app| {
+                                        (field.write)(settings, Some(path.into()), app);
+                                    },
+                                )
+                            })??;
+                            anyhow::Ok(())
+                        })
+                        .detach_and_log_err(cx);
+                }),
+        )
         .into_any_element()
 }
 

@@ -45,6 +45,22 @@ You can also override specific theme attributes for fine-grained control.
 
 → [Themes documentation](./themes.md)
 
+## Background Image
+
+Set `background_image` to draw an image behind the UI. The window and pane surfaces become transparent so that the image shows through them, tinted with the theme's background color:
+
+```json [settings]
+{
+  "background_image": {
+    "path": "~/Pictures/wallpaper.jpg",
+    "opacity": 0.2,
+    "fit": "cover"
+  }
+}
+```
+
+`opacity` ranges from `0.0` (invisible) to `1.0` (fully visible). `fit` accepts `"cover"`, `"contain"`, `"fill"`, `"scale_down"`, or `"none"`. These settings are also available in the Settings Editor, under Appearance.
+
 ## Icon Themes
 
 Customize file and folder icons in the Project Panel and tabs. Browse available icon themes with the Icon Theme Selector ({#action icon_theme_selector::Toggle} in the command palette).

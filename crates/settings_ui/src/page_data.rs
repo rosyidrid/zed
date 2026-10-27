@@ -1669,8 +1669,98 @@ fn appearance_page() -> SettingsPage {
         ]
     }
 
+    fn background_image_section() -> [SettingsPageItem; 4] {
+        [
+            SettingsPageItem::SectionHeader("Background Image"),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: "Image Path",
+                description: "Path to an image drawn behind the UI. A leading `~` is expanded to the home directory.",
+                field: Box::new(SettingField {
+                    organization_override: None,
+                    json_path: Some("background_image.path"),
+                    pick: |settings_content| {
+                        settings_content
+                            .theme
+                            .background_image
+                            .as_ref()?
+                            .path
+                            .as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .theme
+                            .background_image
+                            .get_or_insert_default()
+                            .path = value;
+                    },
+                }),
+                metadata: Some(Box::new(SettingsFieldMetadata {
+                    placeholder: Some("~/Pictures/wallpaper.jpg"),
+                    display_confirm_button: true,
+                    display_clear_button: true,
+                    confirm_on_focus_out: true,
+                    treat_missing_text_as_empty: true,
+                    file_picker: Some("choose-background-image"),
+                    ..Default::default()
+                })),
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: "Image Opacity",
+                description: "How strongly the background image shows through the UI, from 0.0 (invisible) to 1.0 (fully visible).",
+                field: Box::new(SettingField {
+                    organization_override: None,
+                    json_path: Some("background_image.opacity"),
+                    pick: |settings_content| {
+                        settings_content
+                            .theme
+                            .background_image
+                            .as_ref()?
+                            .opacity
+                            .as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .theme
+                            .background_image
+                            .get_or_insert_default()
+                            .opacity = value.map(|opacity| opacity.clamp(0.0, 1.0));
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: "Image Fit",
+                description: "How the background image is scaled to fill the window.",
+                field: Box::new(SettingField {
+                    organization_override: None,
+                    json_path: Some("background_image.fit"),
+                    pick: |settings_content| {
+                        settings_content
+                            .theme
+                            .background_image
+                            .as_ref()?
+                            .fit
+                            .as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .theme
+                            .background_image
+                            .get_or_insert_default()
+                            .fit = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+        ]
+    }
+
     let items: Box<[SettingsPageItem]> = concat_sections!(
         theme_section(),
+        background_image_section(),
         buffer_font_section(),
         ui_font_section(),
         agent_panel_font_section(),

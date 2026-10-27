@@ -4,20 +4,24 @@ use crate::schema::{status_colors_refinement, syntax_overrides, theme_colors_ref
 use crate::{merge_accent_colors, merge_player_colors};
 use collections::HashMap;
 use gpui::{
-    App, Context, Font, FontFallbacks, FontStyle, FontWeight, Global, Pixels, SharedString,
-    Subscription, Window, px,
+    App, Context, Font, FontFallbacks, FontStyle, FontWeight, Global, ObjectFit, Pixels,
+    SharedString, Subscription, Window, px,
 };
 use refineable::Refineable;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-pub use settings::{FontFamilyName, IconThemeName, ThemeAppearanceMode, ThemeName};
+pub use settings::{
+    BackgroundImageFit, FontFamilyName, IconThemeName, ThemeAppearanceMode, ThemeName,
+};
 use settings::{IntoGpui, RegisterSetting, Settings, SettingsContent};
+use std::path::PathBuf;
 use std::sync::Arc;
 use theme::{Appearance, DEFAULT_ICON_THEME_NAME, SyntaxTheme, Theme, UiDensity};
 
 const MIN_FONT_SIZE: Pixels = px(6.0);
 const MAX_FONT_SIZE: Pixels = px(100.0);
 const MIN_LINE_HEIGHT: f32 = 1.0;
+const DEFAULT_BACKGROUND_IMAGE_OPACITY: f32 = 0.2;
 
 pub(crate) fn ui_density_from_settings(val: settings::UiDensity) -> UiDensity {
     match val {
@@ -31,6 +35,38 @@ pub fn appearance_to_mode(appearance: Appearance) -> ThemeAppearanceMode {
     match appearance {
         Appearance::Light => ThemeAppearanceMode::Light,
         Appearance::Dark => ThemeAppearanceMode::Dark,
+    }
+}
+
+/// An image drawn behind the UI, with the surfaces of the UI made transparent so
+/// that the image shows through them.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BackgroundImage {
+    /// The path to the image file, with a leading `~` expanded to the home directory.
+    pub path: PathBuf,
+    /// How strongly the image shows through the UI, from 0.0 to 1.0.
+    pub opacity: f32,
+    /// How the image is scaled to fill the window.
+    pub fit: BackgroundImageFit,
+}
+
+impl BackgroundImage {
+    /// The opacity of the theme background tint painted over the image.
+    ///
+    /// The remaining transparency is what lets the image show through.
+    pub fn tint_opacity(&self) -> f32 {
+        1.0 - self.opacity.clamp(0.0, 1.0)
+    }
+
+    /// The [`ObjectFit`] that corresponds to the configured [`BackgroundImageFit`].
+    pub fn object_fit(&self) -> ObjectFit {
+        match self.fit {
+            BackgroundImageFit::Cover => ObjectFit::Cover,
+            BackgroundImageFit::Contain => ObjectFit::Contain,
+            BackgroundImageFit::Fill => ObjectFit::Fill,
+            BackgroundImageFit::ScaleDown => ObjectFit::ScaleDown,
+            BackgroundImageFit::None => ObjectFit::None,
+        }
     }
 }
 
@@ -101,6 +137,8 @@ pub struct ThemeSettings {
     pub ui_density: UiDensity,
     /// The amount of fading applied to unnecessary code.
     pub unnecessary_code_fade: f32,
+    /// The image drawn behind the UI, if any.
+    pub background_image: Option<BackgroundImage>,
 }
 
 /// Returns the name of the default theme for the given [`Appearance`].
@@ -535,6 +573,12 @@ impl ThemeSettings {
             arc_theme = Arc::new(theme);
         }
 
+        if self.background_image.is_some() {
+            let mut theme = (*arc_theme).clone();
+            theme.make_window_surfaces_transparent();
+            arc_theme = Arc::new(theme);
+        }
+
         arc_theme
     }
 
@@ -788,7 +832,42 @@ impl settings::Settings for ThemeSettings {
             icon_theme: icon_theme_selection,
             ui_density: ui_density_from_settings(content.ui_density.unwrap_or_default()),
             unnecessary_code_fade: content.unnecessary_code_fade.unwrap().0.clamp(0.0, 0.9),
+            background_image: content
+                .background_image
+                .as_ref()
+                .and_then(background_image_from_settings),
         }
+    }
+}
+
+fn background_image_from_settings(
+    background_image: &settings::BackgroundImageContent,
+) -> Option<BackgroundImage> {
+    let path = background_image.path.as_deref()?.trim();
+    if path.is_empty() {
+        return None;
+    }
+
+    Some(BackgroundImage {
+        path: expand_tilde(path),
+        opacity: background_image
+            .opacity
+            .unwrap_or(DEFAULT_BACKGROUND_IMAGE_OPACITY)
+            .clamp(0.0, 1.0),
+        fit: background_image.fit.unwrap_or_default(),
+    })
+}
+
+fn expand_tilde(path: &str) -> PathBuf {
+    let home_dir = util::paths::home_dir();
+
+    if path == "~" {
+        return home_dir.to_path_buf();
+    }
+
+    match path.strip_prefix("~/") {
+        Some(rest) => home_dir.join(rest),
+        None => PathBuf::from(path),
     }
 }
 
@@ -812,6 +891,83 @@ mod tests {
             colors,
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn background_image_expands_tilde_and_defaults() {
+        let content = ::settings::BackgroundImageContent {
+            path: Some("~/pictures/wallpaper.png".into()),
+            opacity: None,
+            fit: None,
+        };
+
+        assert_eq!(
+            background_image_from_settings(&content),
+            Some(BackgroundImage {
+                path: util::paths::home_dir().join("pictures/wallpaper.png"),
+                opacity: DEFAULT_BACKGROUND_IMAGE_OPACITY,
+                fit: BackgroundImageFit::Cover,
+            })
+        );
+    }
+
+    #[test]
+    fn background_image_ignores_blank_paths_and_clamps_opacity() {
+        let blank_path = ::settings::BackgroundImageContent {
+            path: Some("  ".into()),
+            opacity: Some(0.5),
+            fit: Some(BackgroundImageFit::Contain),
+        };
+        assert_eq!(background_image_from_settings(&blank_path), None);
+
+        let no_path = ::settings::BackgroundImageContent::default();
+        assert_eq!(background_image_from_settings(&no_path), None);
+
+        let opaque_path = ::settings::BackgroundImageContent {
+            path: Some("/tmp/wallpaper.png".into()),
+            opacity: Some(4.0),
+            fit: Some(BackgroundImageFit::Fill),
+        };
+        assert_eq!(
+            background_image_from_settings(&opaque_path),
+            Some(BackgroundImage {
+                path: PathBuf::from("/tmp/wallpaper.png"),
+                opacity: 1.0,
+                fit: BackgroundImageFit::Fill,
+            })
+        );
+    }
+
+    #[test]
+    fn background_image_tint_leaves_room_for_the_image() {
+        let background_image = BackgroundImage {
+            path: PathBuf::from("/tmp/wallpaper.png"),
+            opacity: 0.25,
+            fit: BackgroundImageFit::Cover,
+        };
+
+        assert_eq!(background_image.tint_opacity(), 0.75);
+        assert!(matches!(background_image.object_fit(), ObjectFit::Cover));
+    }
+
+    #[test]
+    fn background_image_transparent_surfaces_show_the_image_through_panes() {
+        let mut test_theme = theme_with_colors(Default::default());
+        test_theme.make_window_surfaces_transparent();
+
+        for color in [
+            test_theme.styles.colors.background,
+            test_theme.styles.colors.panel_background,
+            test_theme.styles.colors.editor_background,
+            test_theme.styles.colors.terminal_background,
+            test_theme.styles.colors.title_bar_background,
+        ] {
+            assert_eq!(color.a, 0.0);
+        }
+        assert!(
+            test_theme.styles.colors.text.a > 0.0,
+            "text colors are left opaque so that they stay readable"
+        );
     }
 
     #[test]

@@ -64,8 +64,8 @@ use gpui::{
     EntityId, EventEmitter, FocusHandle, Focusable, Global, HitboxBehavior, Hsla, KeyContext,
     Keystroke, ManagedView, MouseButton, PathPromptOptions, Point, PromptLevel, Render, ResizeEdge,
     Size, Stateful, Subscription, SystemWindowTabController, Task, TaskExt, Tiling, WeakEntity,
-    WindowBounds, WindowHandle, WindowId, WindowOptions, actions, canvas, point, relative, size,
-    transparent_black,
+    WindowBounds, WindowHandle, WindowId, WindowOptions, actions, canvas, img, point, relative,
+    size, transparent_black,
 };
 pub use history_manager::*;
 pub use item::{
@@ -12240,6 +12240,11 @@ pub fn client_side_decorations(
         Decorations::Server => Tiling::default(),
         Decorations::Client { tiling } => tiling,
     };
+    let background_image =
+        ThemeSettings::try_get(cx).and_then(|settings| settings.background_image.clone());
+    // A background image makes the theme draw its window surfaces transparent, so
+    // the image is drawn over an opaque background color and tinted with it.
+    let window_background_color = cx.theme().colors().background.alpha(1.0);
 
     match decorations {
         Decorations::Client { .. } => {
@@ -12362,6 +12367,21 @@ pub fn client_side_decorations(
                 .on_mouse_move(|_e, _, cx| {
                     cx.stop_propagation();
                 })
+                .children(background_image.map(|background_image| {
+                    let image_fit = background_image.object_fit();
+                    let tint_color = window_background_color.alpha(background_image.tint_opacity());
+
+                    div()
+                        .absolute()
+                        .inset_0()
+                        .overflow_hidden()
+                        .when(matches!(decorations, Decorations::Client { .. }), |div| {
+                            div.rounded_client_corners(tiling)
+                        })
+                        .bg(window_background_color)
+                        .child(img(background_image.path).object_fit(image_fit).size_full())
+                        .child(div().absolute().inset_0().bg(tint_color))
+                }))
                 .size_full()
                 .child(element),
         )

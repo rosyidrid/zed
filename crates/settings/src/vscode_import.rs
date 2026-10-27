@@ -1043,6 +1043,7 @@ impl VsCodeSettings {
             icon_theme: None,
             ui_density: None,
             unnecessary_code_fade: None,
+            background_image: None,
             experimental_theme_overrides: None,
             theme_overrides: Default::default(),
         }

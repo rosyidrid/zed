@@ -294,6 +294,36 @@ impl Theme {
         self.styles.window_background_appearance
     }
 
+    /// Makes the surfaces that fill windows and panes transparent, so that a
+    /// background image painted behind them shows through.
+    ///
+    /// These surfaces are made fully transparent rather than merely translucent
+    /// because they nest: overlapping translucent layers would dim the image
+    /// once per layer. The image is instead tinted by a single translucent layer
+    /// painted above it, in `workspace::client_side_decorations`.
+    pub fn make_window_surfaces_transparent(&mut self) {
+        let colors = &mut self.styles.colors;
+
+        for color in [
+            &mut colors.background,
+            &mut colors.surface_background,
+            &mut colors.panel_background,
+            &mut colors.title_bar_background,
+            &mut colors.title_bar_inactive_background,
+            &mut colors.status_bar_background,
+            &mut colors.toolbar_background,
+            &mut colors.tab_bar_background,
+            &mut colors.tab_inactive_background,
+            &mut colors.tab_active_background,
+            &mut colors.editor_background,
+            &mut colors.editor_gutter_background,
+            &mut colors.terminal_background,
+            &mut colors.terminal_ansi_background,
+        ] {
+            *color = color.alpha(0.0);
+        }
+    }
+
     /// Darkens the color by reducing its lightness.
     /// The resulting lightness is clamped to ensure it doesn't go below 0.0.
     ///

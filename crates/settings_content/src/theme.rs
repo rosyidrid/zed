@@ -171,6 +171,49 @@ impl TryFrom<&ThemeColor> for gpui::Rgba {
     }
 }
 
+/// How an image set as the window background is scaled.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    MergeFrom,
+    strum::VariantArray,
+    strum::VariantNames,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum BackgroundImageFit {
+    /// Scale the image so it covers the whole window, cropping the overflow.
+    #[default]
+    Cover,
+    /// Scale the image so it fits inside the window, leaving empty space around it.
+    Contain,
+    /// Stretch the image to fill the window, ignoring its aspect ratio.
+    Fill,
+    /// Scale the image down when it is larger than the window, otherwise draw it at its original size.
+    ScaleDown,
+    /// Draw the image at its original size, anchored at the top left of the window.
+    None,
+}
+
+/// An image drawn behind the UI.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq)]
+#[serde(default)]
+pub struct BackgroundImageContent {
+    /// The path to an image file. A leading `~` is expanded to the home directory.
+    pub path: Option<String>,
+    /// How strongly the image shows through the UI, from 0.0 (invisible) to 1.0 (fully visible).
+    #[schemars(range(min = 0.0, max = 1.0))]
+    pub opacity: Option<f32>,
+    /// How the image is scaled to fill the window.
+    pub fit: Option<BackgroundImageFit>,
+}
+
 /// Settings for rendering text in UI and text buffers.
 
 #[with_fallible_options]
@@ -231,6 +274,9 @@ pub struct ThemeSettingsContent {
     /// How much to fade out unused code.
     #[schemars(range(min = 0.0, max = 0.9))]
     pub unnecessary_code_fade: Option<CodeFade>,
+
+    /// An image drawn behind the UI, with the window and pane surfaces made transparent so it shows through.
+    pub background_image: Option<BackgroundImageContent>,
 
     /// EXPERIMENTAL: Overrides for the current theme.
     ///

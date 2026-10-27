@@ -12,6 +12,22 @@
     "dark": "One Dark",
   },
   "icon_theme": "Zed (Default)",
+  // An image drawn behind the UI. The window and pane surfaces become
+  // transparent so that the image shows through them.
+  //
+  // `path` is the path to an image file, where a leading `~` expands to the
+  // home directory. `opacity` controls how strongly the image shows through,
+  // from 0.0 (invisible) to 1.0 (fully visible). `fit` is one of:
+  // - "cover": fill the window, cropping the overflow
+  // - "contain": fit inside the window, leaving empty space around the image
+  // - "fill": stretch the image to fill the window
+  // - "scale_down": only shrink the image when it is larger than the window
+  // - "none": draw the image at its original size
+  "background_image": {
+    "path": "",
+    "opacity": 0.2,
+    "fit": "cover",
+  },
   // The name of a base set of key bindings to use.
   // This setting can take the following values:
   //

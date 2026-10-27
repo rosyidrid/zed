@@ -28,7 +28,7 @@ pub use crate::schema::{
 };
 use crate::settings::adjust_buffer_font_size;
 pub use crate::settings::{
-    AgentBufferFontSize, AgentUiFontSize, BufferLineHeight, FontFamilyName,
+    AgentBufferFontSize, AgentUiFontSize, BackgroundImage, BufferLineHeight, FontFamilyName,
     GitCommitBufferFontSize, IconThemeName, IconThemeSelection, MarkdownPreviewFontSize,
     ThemeAppearanceMode, ThemeName, ThemeSelection, ThemeSettings, adjust_agent_buffer_font_size,
     adjust_agent_ui_font_size, adjust_git_commit_buffer_font_size,
@@ -96,9 +96,10 @@ pub fn init(themes_to_load: LoadThemes, cx: &mut App) {
         settings.markdown_preview_font_size_settings();
     let mut prev_theme_name = settings.theme.name(SystemAppearance::global(cx).0);
     let mut prev_icon_theme_name = settings.icon_theme.name(SystemAppearance::global(cx).0);
-    let mut prev_theme_overrides = (
+    let mut prev_theme_customization = (
         settings.experimental_theme_overrides.clone(),
         settings.theme_overrides.clone(),
+        settings.background_image.clone(),
     );
 
     cx.observe_global::<SettingsStore>(move |cx| {
@@ -112,9 +113,10 @@ pub fn init(themes_to_load: LoadThemes, cx: &mut App) {
         let markdown_preview_font_size_settings = settings.markdown_preview_font_size_settings();
         let theme_name = settings.theme.name(SystemAppearance::global(cx).0);
         let icon_theme_name = settings.icon_theme.name(SystemAppearance::global(cx).0);
-        let theme_overrides = (
+        let theme_customization = (
             settings.experimental_theme_overrides.clone(),
             settings.theme_overrides.clone(),
+            settings.background_image.clone(),
         );
 
         if buffer_font_size_settings != prev_buffer_font_size_settings {
@@ -147,9 +149,9 @@ pub fn init(themes_to_load: LoadThemes, cx: &mut App) {
             reset_markdown_preview_font_size(cx);
         }
 
-        if theme_name != prev_theme_name || theme_overrides != prev_theme_overrides {
+        if theme_name != prev_theme_name || theme_customization != prev_theme_customization {
             prev_theme_name = theme_name;
-            prev_theme_overrides = theme_overrides;
+            prev_theme_customization = theme_customization;
             reload_theme(cx);
         }
 
